@@ -41,6 +41,26 @@ enum Inst {
     Srli {rd: u32, rs1: u32, shamt: u32},
     Srai {rd: u32, rs1: u32, shamt: u32},
 
+    //Stype
+    Sb {rs1: u32, rs2: u32, imm: i32},
+    Sh {rs1: u32, rs2: u32, imm: i32},
+    Sw {rs1: u32, rs2: u32, imm: i32},
+    
+    //Btype
+    Beq {rs1: u32, rs2: u32, imm: i32},
+    Bne {rs1: u32, rs2: u32, imm: i32},
+    Blt {rs1: u32, rs2: u32, imm: i32},
+    Bge {rs1: u32, rs2: u32, imm: i32},
+    Bltu {rs1: u32, rs2: u32, imm: i32}, 
+    Bgeu {rs1: u32, rs2: u32, imm: i32}, 
+
+    //Utype 
+    Lui {rd: u32, imm: i32},
+    Auipc {rd: u32, imm: i32},
+    
+    //Jtype
+    Jal {rd: u32, imm: i32},
+
     Undefined,
 }
 
@@ -125,7 +145,7 @@ impl Emulator {
                     let imm = ((imm as i32) << 20) >> 20;
 
                     match opcode {
-                        0b1101111 => return Inst::Jalr { rd: rd, rs1: rs1, imm: imm },
+                        0b1100111 => return Inst::Jalr { rd: rd, rs1: rs1, imm: imm },
                         0b0000011 => {
                             match funct3 {
                                 0b000 => return Inst::Lb { rd: rd, rs1: rs1, imm: imm },
@@ -157,13 +177,94 @@ impl Emulator {
                         }
                         _=> return Inst::Undefined
                     }
-
                 }
-                InstType::S => {}
-                InstType::B => {}
-                InstType::U => {}
-                InstType::J => {}
+                InstType::S => {
+                    let opcode = opcode;
+                    let imm1 = (inst >> 7) & 0b1111_1;
+                    let funct3 = (inst >> 12) & 0b111;
+                    let rs1 = (inst >> 15) & 0b1111_1;
+                    let rs2 = (inst >> 20) & 0b1111_1; 
+                    let imm2 = (inst >> 25) & 0b1111_111;
 
+                    //merging and sign extending imm
+                    let imm = (imm1) | (imm2 << 5);
+                    let imm = ((imm as i32) << 20) >> 20;
+
+                    match opcode {
+                        0b0100011 => {
+                            match funct3 {
+                                0b000 => return Inst::Sb { rs1: rs1, rs2: rs2, imm: imm },
+                                0b001 => return Inst::Sh { rs1: rs1, rs2: rs2, imm: imm },
+                                0b010 => return Inst::Sw { rs1: rs1, rs2: rs2, imm: imm },
+                                _=> return Inst::Undefined,
+                            }
+                        }
+                        _=> return Inst::Undefined,
+                    }
+                }
+                InstType::B => {
+                    let opcode = opcode;
+                    let imm1 = (inst >> 7) & 0b1111_1;
+                    let funct3 = (inst >> 12) & 0b111;
+                    let rs1 = (inst >> 15) & 0b1111_1;
+                    let rs2 = (inst >> 20) & 0b1111_1;
+                    let imm2 = (inst >> 25) & 0b1111_111;
+
+                    //merging and sign extending imm
+                    let imm11 = (imm1 & 1) << 11;
+                    let imm41 = (imm1 >> 1) << 1;
+                    let imm105 = (imm2 & 0b1111_11) << 5;
+                    let imm12 = (imm2 >> 6) << 12;
+                    let imm = imm41 | imm105 | imm11 | imm12;
+                    let imm = ((imm as i32) << 20) >> 20;  
+
+                    match opcode {
+                        0b1100011 => {
+                            match funct3 {
+                                0b000 => return Inst::Beq { rs1: rs1, rs2: rs2, imm: imm }, 
+                                0b001 => return Inst::Bne { rs1: rs1, rs2: rs2, imm: imm }, 
+                                0b100 => return Inst::Blt { rs1: rs1, rs2: rs2, imm: imm }, 
+                                0b101 => return Inst::Bge { rs1: rs1, rs2: rs2, imm: imm }, 
+                                0b110 => return Inst::Bltu { rs1: rs1, rs2: rs2, imm: imm },  
+                                0b111 => return Inst::Bgeu { rs1: rs1, rs2: rs2, imm: imm }, 
+                                _=> return Inst::Undefined,
+                            }
+                        }
+                        _=> return Inst::Undefined,
+                    }
+                }
+                InstType::U => {
+                    let opcode = opcode;
+                    let rd = (inst >> 7) & 0b1111_1;
+                    let imm = inst >> 12;
+
+                    //sign extend imm
+                    let imm = ((inst as i32) << 12) >> 12;
+
+                    match opcode {
+                        0b0110111 => return Inst::Lui { rd: rd, imm: imm },
+                        0b0010111 => return Inst::Auipc { rd: rd, imm: imm },
+                        _=> return Inst::Undefined,
+                    }
+                }
+                InstType::J => {
+                    let opcode = opcode;
+                    let rd = (inst >> 7 ) & 0b1111_1;
+                    let imm = inst >> 12;
+
+                    //merging and sign extending imm
+                    let imm1912 = ((inst >> 12) & 0b1111_1111) << 12;
+                    let imm11 = ((inst >> 20) & 1) << 11;
+                    let imm101 = ((inst >> 21) & 0b1111_1111_11) << 1;
+                    let imm20 = (inst >> 31) << 20;
+                    let imm = imm101 | imm11 | imm1912 | imm20;
+                    let imm = ((imm as i32) << 12) >> 12;
+
+                    match opcode {
+                        0b1101111 => return Inst::Jal { rd: rd, imm: imm },
+                        _=> return Inst::Undefined,
+                    }
+                }
                 _ => unreachable!(),
             }
         }
@@ -214,7 +315,7 @@ const INSTRUCTION_TYPE_LOOKUP_TABLE: [Option<InstType>; SIZE_INSTRUCTION_TYPE_LO
     /*    10100 */ None,
     /*    10101 */ None,
     /*    10110 */ None,
-    /*    10111 */ None,
+    /*    10111 */ Some(InstType::U),
     /*    11000 */ None,
     /*    11001 */ None,
     /*    11010 */ None,
@@ -226,7 +327,7 @@ const INSTRUCTION_TYPE_LOOKUP_TABLE: [Option<InstType>; SIZE_INSTRUCTION_TYPE_LO
     /*   100000 */ None,
     /*   100001 */ None,
     /*   100010 */ None,
-    /*   100011 */ None,
+    /*   100011 */ Some(InstType::S),
     /*   100100 */ None,
     /*   100101 */ None,
     /*   100110 */ None,
@@ -246,7 +347,7 @@ const INSTRUCTION_TYPE_LOOKUP_TABLE: [Option<InstType>; SIZE_INSTRUCTION_TYPE_LO
     /*   110100 */ None,
     /*   110101 */ None,
     /*   110110 */ None,
-    /*   110111 */ None,
+    /*   110111 */ Some(InstType::U),
     /*   111000 */ None,
     /*   111001 */ None,
     /*   111010 */ None,
@@ -290,11 +391,11 @@ const INSTRUCTION_TYPE_LOOKUP_TABLE: [Option<InstType>; SIZE_INSTRUCTION_TYPE_LO
     /*  1100000 */ None,
     /*  1100001 */ None,
     /*  1100010 */ None,
-    /*  1100011 */ None,
+    /*  1100011 */ Some(InstType::B),
     /*  1100100 */ None,
     /*  1100101 */ None,
     /*  1100110 */ None,
-    /*  1100111 */ None,
+    /*  1100111 */ Some(InstType::I),
     /*  1101000 */ None,
     /*  1101001 */ None,
     /*  1101010 */ None,
@@ -302,7 +403,7 @@ const INSTRUCTION_TYPE_LOOKUP_TABLE: [Option<InstType>; SIZE_INSTRUCTION_TYPE_LO
     /*  1101100 */ None,
     /*  1101101 */ None,
     /*  1101110 */ None,
-    /*  1101111 */ Some(InstType::I),
+    /*  1101111 */ Some(InstType::J),
     /*  1110000 */ None,
     /*  1110001 */ None,
     /*  1110010 */ None,
