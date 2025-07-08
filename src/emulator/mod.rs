@@ -23,6 +23,11 @@ enum Inst {
     Sra {rd: u32, rs1: u32, rs2: u32},
     Or {rd: u32, rs1: u32, rs2: u32},
     And {rd: u32, rs1: u32, rs2: u32},
+    Addw {rd: u32, rs1: u32, rs2: u32},
+    Subw {rd: u32, rs1: u32, rs2: u32},
+    Sllw {rd: u32, rs1: u32, rs2: u32},
+    Srlw {rd: u32, rs1: u32, rs2: u32},
+    Sraw {rd: u32, rs1: u32, rs2: u32},
 
     //Itype
     Jalr {rd: u32, rs1: u32, imm: i32},
@@ -40,12 +45,24 @@ enum Inst {
     Slli {rd: u32, rs1: u32, shamt: u32},
     Srli {rd: u32, rs1: u32, shamt: u32},
     Srai {rd: u32, rs1: u32, shamt: u32},
+    Fence {rd: u32, rs1: u32, shamt: u32},
+    FenceTso,
+    Pause,
+    Ecall,
+    Ebreak,
+    Lwu {rd: u32, rs1: u32, imm: i32},
+    Ld {rd: u32, rs1: u32, imm: i32},
+    Addiw {rd: u32, rs1: u32, imm: i32},
+    Slliw {rd: u32, rs1: u32, shamt: u32},
+    Srliw {rd: u32, rs1: u32, shamt: u32},
+    Sraiw {rd: u32, rs1: u32, shamt: u32},
 
     //Stype
     Sb {rs1: u32, rs2: u32, imm: i32},
     Sh {rs1: u32, rs2: u32, imm: i32},
     Sw {rs1: u32, rs2: u32, imm: i32},
-    
+    Sd {rs1: u32, rs2: u32, imm: i32},
+
     //Btype
     Beq {rs1: u32, rs2: u32, imm: i32},
     Bne {rs1: u32, rs2: u32, imm: i32},
@@ -127,6 +144,26 @@ impl Emulator {
                                 _=> return Inst::Undefined
                             }
                         }
+                        0b0111011 => {
+                            match funct3 {
+                                0b000 => {
+                                    match funct7 {
+                                        0b0000000 => return Inst::Addw { rd: rd, rs1: rs1, rs2: rs2 },
+                                        0b0100000 => return Inst::Subw { rd: rd, rs1: rs1, rs2: rs2 },
+                                        _=> return Inst::Undefined
+                                    }
+                                }
+                                0b001 => return Inst::Sllw { rd: rd, rs1: rs1, rs2: rs2 },
+                                0b101 => {
+                                    match funct7 {
+                                        0b0000000 => return Inst::Srlw { rd: rd, rs1: rs1, rs2: rs2 },
+                                        0b0100000 => return Inst::Sraw { rd: rd, rs1: rs1, rs2: rs2 },
+                                        _=> return Inst::Undefined
+                                    }
+                                }
+                                _=> return Inst::Undefined,
+                            }
+                        }                       
                         _=> return Inst::Undefined
                     }   
                 }
@@ -153,10 +190,12 @@ impl Emulator {
                                 0b010 => return Inst::Lw { rd: rd, rs1: rs1, imm: imm },
                                 0b100 => return Inst::Lbu { rd: rd, rs1: rs1, imm: imm },
                                 0b101 => return Inst::Lhu { rd: rd, rs1: rs1, imm: imm },
+                                0b110 => return Inst::Lwu { rd: rd, rs1: rs1, imm: imm },
+                                0b011 => return Inst::Ld { rd: rd, rs1: rs1, imm: imm },
                                 _=> return Inst::Undefined
                             }
                         }
-                        0010011 => {
+                        0b0010011 => {
                             match funct3 {
                                 0b000 => return Inst::Addi { rd: rd, rs1: rs1, imm: imm },
                                 0b010 => return Inst::Slti { rd: rd, rs1: rs1, imm: imm },
@@ -173,6 +212,46 @@ impl Emulator {
                                     }
                                 }
                                 _=> return Inst::Undefined
+                            }
+                        }
+                        0b0001111 => {
+                            match (rd, rs1, funct3) {
+                                   (0, 0, 0) => {
+                                        match shamt {
+                                            0b100000110011 => return Inst::FenceTso,
+                                            0b000000010000 => return Inst::Pause,
+                                            _=> {},
+                                        }
+                                    }     
+                                   (_, _, 0) => return Inst::Fence { rd: rd, rs1: rs1, shamt: shamt },                                
+                                   _=> return Inst::Undefined,
+                               }
+                            
+                            
+                        }
+                        0b1110011 => {
+                            if rd == 0 && funct3 == 0 && rs1 == 0 {
+                                match imm {
+                                    0 => return Inst::Ecall,
+                                    1 => return Inst::Ebreak,
+                                    _=> return Inst::Undefined,
+                                }
+                            }
+                            return Inst::Undefined;
+                        }
+                        0b0011011 => {
+                            match funct3 {
+                                0b000 => return Inst::Addiw { rd: rd, rs1: rs1, imm: imm },
+                                0b001 => return Inst::Slliw { rd: rd, rs1: rs1, shamt: shamt },
+                                0b101 => {
+                                    match funct7 >> 5 {
+                                        0b0000000 => return Inst::Srliw { rd: rd, rs1: rs1, shamt: shamt },
+                                        0b0100000 => return Inst::Sraiw { rd: rd, rs1: rs1, shamt: shamt },
+                                        _=> return Inst::Undefined,
+                                    }
+                                }
+
+                                _=> return Inst::Undefined,
                             }
                         }
                         _=> return Inst::Undefined
@@ -196,6 +275,7 @@ impl Emulator {
                                 0b000 => return Inst::Sb { rs1: rs1, rs2: rs2, imm: imm },
                                 0b001 => return Inst::Sh { rs1: rs1, rs2: rs2, imm: imm },
                                 0b010 => return Inst::Sw { rs1: rs1, rs2: rs2, imm: imm },
+                                0b011 => return Inst::Sd { rs1: rs1, rs2: rs2, imm: imm },
                                 _=> return Inst::Undefined,
                             }
                         }
@@ -307,7 +387,7 @@ const INSTRUCTION_TYPE_LOOKUP_TABLE: [Option<InstType>; SIZE_INSTRUCTION_TYPE_LO
     /*     1100 */ None,
     /*     1101 */ None,
     /*     1110 */ None,
-    /*     1111 */ None,
+    /*     1111 */ Some(InstType::I),
     /*    10000 */ None,
     /*    10001 */ None,
     /*    10010 */ None,
@@ -319,7 +399,7 @@ const INSTRUCTION_TYPE_LOOKUP_TABLE: [Option<InstType>; SIZE_INSTRUCTION_TYPE_LO
     /*    11000 */ None,
     /*    11001 */ None,
     /*    11010 */ None,
-    /*    11011 */ None,
+    /*    11011 */ Some(InstType::I),
     /*    11100 */ None,
     /*    11101 */ None,
     /*    11110 */ None,
@@ -351,7 +431,7 @@ const INSTRUCTION_TYPE_LOOKUP_TABLE: [Option<InstType>; SIZE_INSTRUCTION_TYPE_LO
     /*   111000 */ None,
     /*   111001 */ None,
     /*   111010 */ None,
-    /*   111011 */ None,
+    /*   111011 */ Some(InstType::R),
     /*   111100 */ None,
     /*   111101 */ None,
     /*   111110 */ None,
@@ -407,7 +487,7 @@ const INSTRUCTION_TYPE_LOOKUP_TABLE: [Option<InstType>; SIZE_INSTRUCTION_TYPE_LO
     /*  1110000 */ None,
     /*  1110001 */ None,
     /*  1110010 */ None,
-    /*  1110011 */ None,
+    /*  1110011 */ Some(InstType::I),
     /*  1110100 */ None,
     /*  1110101 */ None,
     /*  1110110 */ None,
