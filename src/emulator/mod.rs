@@ -1,6 +1,7 @@
 mod decoder;
 mod memory;
 mod cpu;
+mod loader;
 
 use memory::Mmu;
 use cpu::Cpu;

@@ -341,7 +341,6 @@ pub fn decode(inst: u32) -> Inst {
                     _=> return Inst::Undefined,
                 }
             }
-            _ => unreachable!(),
         }
     }
 

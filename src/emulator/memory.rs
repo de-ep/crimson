@@ -20,7 +20,7 @@ impl Mmu {
         }
     }
 
-    pub fn perm_get<'a>(&'a self, vaddr: usize, size: usize) -> Option<&'a [u8]> {
+    pub fn perm_get(&self, vaddr: usize, size: usize) -> Option<&[u8]> {
         let end = vaddr + size;
 
         if end > self.perm.len() {
@@ -56,7 +56,7 @@ impl Mmu {
         Ok(())
     }
 
-    pub fn dram_read<'a>(&'a self, vaddr: usize, size: usize) -> Option<&'a [u8]> {
+    pub fn dram_read(&self, vaddr: usize, size: usize) -> Option<&[u8]> {
         let end = vaddr + size;
 
         if end > self.dram.len() {

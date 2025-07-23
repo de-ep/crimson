@@ -30,7 +30,6 @@ impl Cpu {
             RegType::ProgCounter => {
                 Some(self.pc)
             }
-            _=> unreachable!(),
         }
         
     }
@@ -47,7 +46,6 @@ impl Cpu {
             RegType::ProgCounter => {
                 self.pc = value;
             }
-            _=> unreachable!(),
         }
         
         Ok(())
