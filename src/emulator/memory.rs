@@ -1,8 +1,8 @@
 const DRAM_SIZE: usize = 1024 * 1024;
 
-const PERM_R: u8 = 1;
-const PERM_W: u8 = 1 << 1;
-const PERM_X: u8 = 1 << 2;
+pub const PERM_R: u8 = 1;
+pub const PERM_W: u8 = 1 << 1;
+pub const PERM_X: u8 = 1 << 2;
 
 
 pub struct Mmu {
@@ -52,6 +52,18 @@ impl Mmu {
         }
 
         self.dram[vaddr..end].copy_from_slice(data);
+
+        Ok(())
+    }
+
+    pub fn dram_set(&mut self, val: u8, vaddr: usize, size: usize) -> Result<(), ()> {
+        let end = vaddr + size;
+
+        if end > self.dram.len() {
+            return Err(());
+        }
+
+        self.dram[vaddr..end].fill(val);
 
         Ok(())
     }

@@ -13,6 +13,8 @@ pub enum LoaderErr {
     UnableToReadFile,
     UnsupportedFileType,
     InvalidFile,
+    UnableToWriteToDram,
+    UnableToSetPerms,
 }
 
 pub fn load_file_to_dram<P: AsRef<Path>>(mmu: &mut Mmu, file: P) -> Result<usize, LoaderErr> {
@@ -29,7 +31,7 @@ pub fn load_file_to_dram<P: AsRef<Path>>(mmu: &mut Mmu, file: P) -> Result<usize
 }
 
 mod elf_loader {
-    use crate::emulator::memory::Mmu;
+    use crate::emulator::memory::{self, Mmu};
     use crate::emulator::loader::LoaderErr;
 
     const EI_NIDENT: usize = 16;
@@ -38,7 +40,11 @@ mod elf_loader {
     const EI_DATA: usize =  5;
     const ELFDATA2LSB: u8 = 01;
     const ET_EXEC: u16 = 02;
-
+    const EM_RISCV: u16 = 243;
+    const PT_LOAD: u32 = 01;
+    const PF_R:u32 = 0x4;
+    const PF_W:u32 = 0x2;
+    const PF_X:u32 = 0x1;
 
     /*
            typedef struct {
@@ -72,7 +78,7 @@ mod elf_loader {
     /*           
              typedef struct {
                uint32_t   p_type;
-               uint32_t   p_flags;
+               uint32_t   p_flagsz;
                Elf64_Off  p_offset;
                Elf64_Addr p_vaddr;
                Elf64_Addr p_paddr;
@@ -85,7 +91,7 @@ mod elf_loader {
     #[repr(C)]
     struct ProgramHeader{
         p_type: u32,
-        p_flags: u32,
+        p_flagsz: u32,
         p_offset: u64,
         p_vaddr: u64,
         p_paddr: u64,
@@ -194,7 +200,7 @@ mod elf_loader {
         
 
         //parsing section_headers
-        if size_of::<SectionHeader>() != elf_header.e_shentsize as usize {println!("exit");
+        if size_of::<SectionHeader>() != elf_header.e_shentsize as usize {
             return Err(LoaderErr::InvalidFile);
         }
         if elf_header.e_shoff as usize + (elf_header.e_shentsize * elf_header.e_shnum) as usize > data.len() {
@@ -234,42 +240,79 @@ mod elf_loader {
     pub fn load_elf_to_dram(mmu: &mut Mmu, data: &[u8]) -> Result<usize, LoaderErr> {
         let elf = parse_elf(data)?;
 
-        println!("{:?}", elf.section_headers);
-
-        Ok(32)
-    }
-
-}/*
-let entry_rva;
-let program_header_offset;
-let section_header_offset;
-
-
-
+        
         //EI_DATA, endian
-        if elf_header.e_ident[EI_DATA] != ELFDATA2LSB {
+        if elf.elf_header.e_ident[EI_DATA] != ELFDATA2LSB {
             return Err(LoaderErr::UnsupportedFileType);
         }
 
-        //EI_OSABI TODO
-
         //identifies the object file type
-        if elf_header.e_type != ET_EXEC {
+        if elf.elf_header.e_type != ET_EXEC {
             return  Err(LoaderErr::UnsupportedFileType);
         }
 
         //e_machine TODO
-
-
-        if elf_header.e_entry == 0 {
+        if elf.elf_header.e_machine != EM_RISCV {
             return  Err(LoaderErr::UnsupportedFileType);
         }
-        entry_rva = elf_header.e_entry;
 
-
-        if elf_header.e_phoff >= data.len() || elf_header.e_shoff >= data.len() {
+        if elf.elf_header.e_entry == 0 {
             return  Err(LoaderErr::UnsupportedFileType);
         }
-        program_header_offset = elf_header.e_phoff;
-        section_header_offset = elf_header.e_shoff;
- */
+        //also bound check the EP
+
+
+        //loading program
+        if let Some(program_headers) = elf.program_headers {
+            for header in program_headers {
+                if header.p_type == PT_LOAD {
+                    let dest = header.p_vaddr as usize;
+                    let src = header.p_offset as usize;
+                    let size_in_file = header.p_filesz as usize;
+                    let size_in_mem = header.p_memsz as usize;
+                    let mut perm: u8 = 0;
+                    let src_end = src + size_in_file;
+
+                    if size_in_file > size_in_mem {
+                        return Err(LoaderErr::InvalidFile);
+                    }
+                    
+                    //mapping data to dram
+                    if size_in_file != 0 {
+                        if let Err(_) = mmu.dram_write(dest.try_into().unwrap(), &data[src..src_end]) {
+                            return Err(LoaderErr::UnableToWriteToDram);
+                        }
+                    }
+
+                    if size_in_mem - size_in_file > 0 {
+                        let vaddr: usize = dest + size_in_file;
+                        let size: usize = size_in_mem - size_in_file;
+
+                        if let Err(_) = mmu.dram_set(0, vaddr, size) {
+                            return Err(LoaderErr::UnableToWriteToDram);
+                        }
+                    }
+                    
+                    //setting permissions
+                    
+                    if header.p_flagsz & PF_R == PF_R {
+                        perm |= memory::PERM_R;
+                    }
+                    if header.p_flagsz & PF_W == PF_W {
+                        perm |= memory::PERM_W;
+                    }
+                    if header.p_flagsz & PF_X == PF_X {
+                        perm |= memory::PERM_X;
+                    }
+
+                    if let Err(_) = mmu.perm_set(dest, size_in_mem, perm) {
+                        return Err(LoaderErr::UnableToSetPerms);
+                    }
+                }
+            }
+        }
+
+        Ok(elf.elf_header.e_entry.try_into().unwrap())
+    }
+
+}
