@@ -1,5 +1,6 @@
 use std::{fs, io::Error, path::Path};
-use super::memory::Mmu;
+use super::memory::{self, Mmu};
+use thiserror::Error;
 
 const MAGIC_ELF: [u8; 4] = [0x7F, 0x45, 0x4C, 0x46];        //.ELF
 
@@ -7,27 +8,32 @@ enum FileType {
     Elf,
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum LoaderErr {
-    GeneralErr,
-    UnableToReadFile,
+    #[error("Unable to read file: {0}")]
+    UnableToReadFile(#[from] std::io::Error),
+
+    #[error("Unsupported file type")]
     UnsupportedFileType,
+    
+    #[error("Invalid file")]
     InvalidFile,
-    UnableToWriteToDram,
-    UnableToSetPerms,
+    
+    #[error("DRAM I/O Fail: {0}")]
+    DramIoFail(#[from] memory::MmmuErr),
 }
 
-pub fn load_file_to_dram<P: AsRef<Path>>(mmu: &mut Mmu, file: P) -> Result<usize, LoaderErr> {
-    if let Ok(data) = fs::read(file) {
+pub fn load_file_to_dram<P: AsRef<Path>>(mmu: &mut Mmu, file: &P) -> Result<usize, LoaderErr> {
+    let data = fs::read(file)?;
 
-        if data.len() > MAGIC_ELF.len() {
-            if MAGIC_ELF == data[0..MAGIC_ELF.len()] {
-                return elf_loader::load_elf_to_dram(mmu, &data);
-            }
-            return Err(LoaderErr::InvalidFile);
-        }
-    } 
-    Err(LoaderErr::UnsupportedFileType)
+    if data.len() > MAGIC_ELF.len() {
+        if MAGIC_ELF == data[0..MAGIC_ELF.len()] {
+            // right now loader does not support binaries compiled with pie
+            return elf_loader::load_elf_to_dram(mmu, &data);
+        } 
+    }
+    
+    Err(LoaderErr::UnsupportedFileType)    
 }
 
 mod elf_loader {
@@ -279,18 +285,15 @@ mod elf_loader {
                     
                     //mapping data to dram
                     if size_in_file != 0 {
-                        if let Err(_) = mmu.dram_write(dest.try_into().unwrap(), &data[src..src_end]) {
-                            return Err(LoaderErr::UnableToWriteToDram);
-                        }
+                        mmu.dram_write(dest, &data[src..src_end])?;
+
                     }
 
                     if size_in_mem - size_in_file > 0 {
                         let vaddr: usize = dest + size_in_file;
                         let size: usize = size_in_mem - size_in_file;
 
-                        if let Err(_) = mmu.dram_set(0, vaddr, size) {
-                            return Err(LoaderErr::UnableToWriteToDram);
-                        }
+                        mmu.dram_set(0, vaddr, size)?
                     }
                     
                     //setting permissions
@@ -305,14 +308,14 @@ mod elf_loader {
                         perm |= memory::PERM_X;
                     }
 
-                    if let Err(_) = mmu.perm_set(dest, size_in_mem, perm) {
-                        return Err(LoaderErr::UnableToSetPerms);
-                    }
+                    mmu.perm_set(dest, size_in_mem, perm)?;
                 }
             }
+            Ok(elf.elf_header.e_entry as usize)
         }
-
-        Ok(elf.elf_header.e_entry.try_into().unwrap())
+        else {
+            Err(LoaderErr::InvalidFile)
+        }
     }
 
 }

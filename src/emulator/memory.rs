@@ -5,6 +5,12 @@ pub const PERM_W: u8 = 1 << 1;
 pub const PERM_X: u8 = 1 << 2;
 
 
+#[derive(thiserror::Error, Debug)]
+pub enum MmmuErr {
+    #[error("Index out of bounds: {0}")]
+    IndexOutOfBounds(usize),
+}
+
 pub struct Mmu {
     dram: Vec<u8>,
     perm: Vec<u8>,
@@ -20,21 +26,21 @@ impl Mmu {
         }
     }
 
-    pub fn perm_get(&self, vaddr: usize, size: usize) -> Option<&[u8]> {
+    pub fn perm_get(&self, vaddr: usize, size: usize) -> Result<&[u8], MmmuErr> {
         let end = vaddr + size;
 
         if end > self.perm.len() {
-            return None;
+            return Err(MmmuErr::IndexOutOfBounds(end));
         }
         
-        Some(&self.perm[vaddr..end])
+        Ok(&self.perm[vaddr..end])
     } 
 
-    pub fn perm_set(&mut self, vaddr: usize, size: usize, perm: u8) -> Result<(), ()> {
+    pub fn perm_set(&mut self, vaddr: usize, size: usize, perm: u8) -> Result<(), MmmuErr> {
         let end = vaddr + size;
 
         if end > self.perm.len() {
-            return Err(());
+            return Err(MmmuErr::IndexOutOfBounds(end));
         }
 
         for p in &mut self.perm[vaddr..end] {
@@ -44,11 +50,11 @@ impl Mmu {
         Ok(())
     }
 
-    pub fn dram_write(&mut self, vaddr: usize, data: &[u8]) -> Result<(), ()> {
+    pub fn dram_write(&mut self, vaddr: usize, data: &[u8]) -> Result<(), MmmuErr> {
         let end = vaddr + data.len();
 
         if end > self.dram.len() {
-            return Err(());
+            return Err(MmmuErr::IndexOutOfBounds(end));
         }
 
         self.dram[vaddr..end].copy_from_slice(data);
@@ -56,11 +62,11 @@ impl Mmu {
         Ok(())
     }
 
-    pub fn dram_set(&mut self, val: u8, vaddr: usize, size: usize) -> Result<(), ()> {
+    pub fn dram_set(&mut self, val: u8, vaddr: usize, size: usize) -> Result<(), MmmuErr> {
         let end = vaddr + size;
 
         if end > self.dram.len() {
-            return Err(());
+            return Err(MmmuErr::IndexOutOfBounds(end));
         }
 
         self.dram[vaddr..end].fill(val);
@@ -68,14 +74,14 @@ impl Mmu {
         Ok(())
     }
 
-    pub fn dram_read(&self, vaddr: usize, size: usize) -> Option<&[u8]> {
+    pub fn dram_read(&self, vaddr: usize, size: usize) -> Result<&[u8], MmmuErr> {
         let end = vaddr + size;
 
         if end > self.dram.len() {
-            return None;
+            return Err(MmmuErr::IndexOutOfBounds(end));
         }
 
-        Some(&self.dram[vaddr..end])
+        Ok(&self.dram[vaddr..end])
     }
 
 }

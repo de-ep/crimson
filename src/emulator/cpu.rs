@@ -1,4 +1,13 @@
+use super::{decoder::{Inst, InstType}, Emulator};
+
 const MAX_REGS: usize = 32;
+
+
+#[derive(thiserror::Error, Debug)]
+pub enum CpuErr {
+    #[error("Invalid register: {0}")]
+    InvalidRegister(usize),
+}
 
 pub enum RegType {
     GenPurpose,
@@ -18,27 +27,27 @@ impl Cpu {
         }
     }
 
-    pub fn get_reg(&self, rtype: RegType, reg_index: usize) -> Option<u64> {
+    pub fn get_reg(&self, rtype: RegType, reg_index: usize) -> Result<u64, CpuErr> {
         match rtype {
             RegType::GenPurpose => {
                 if reg_index >= MAX_REGS {
-                    return None;
+                    return Err(CpuErr::InvalidRegister(reg_index));
                 }
 
-                Some(self.r[reg_index])
+                Ok(self.r[reg_index])
             }
             RegType::ProgCounter => {
-                Some(self.pc)
+                Ok(self.pc)
             }
         }
         
     }
 
-    pub fn set_reg(&mut self, rtype: RegType, reg_index: usize, value: u64) -> Result<(), ()>{
+    pub fn set_reg(&mut self, rtype: RegType, reg_index: usize, value: u64) -> Result<(), CpuErr>{
         match rtype {
             RegType::GenPurpose => {
                 if reg_index >= MAX_REGS {
-                    return Err(());
+                    return Err(CpuErr::InvalidRegister(reg_index));
                 }
 
                 self.r[reg_index] = value;
@@ -51,4 +60,30 @@ impl Cpu {
         Ok(())
     }
 
+    pub fn exec(emu: &mut Emulator, inst: Inst, inst_type: InstType) -> Result<(), CpuErr> {
+
+        match inst_type {
+            InstType::R => {
+                
+            }
+            InstType::I => {
+                
+            }
+            InstType::S => {
+                
+            }
+            InstType::B => {
+                
+            }
+            InstType::U => {
+                
+            }
+            InstType::J => {
+                
+            }
+        }
+
+
+        Ok(())
+    }
 }
