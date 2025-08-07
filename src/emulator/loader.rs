@@ -293,7 +293,7 @@ mod elf_loader {
                         let vaddr: usize = dest + size_in_file;
                         let size: usize = size_in_mem - size_in_file;
 
-                        mmu.dram_set(0, vaddr, size)?
+                        mmu.dram_set(0, vaddr, size)?;
                     }
                     
                     //setting permissions

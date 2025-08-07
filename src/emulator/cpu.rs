@@ -1,7 +1,7 @@
 use super::{decoder::{Inst, InstType}, Emulator};
 
 const MAX_REGS: usize = 32;
-
+const RAW_INST_SIZE:u64 = 4;
 
 #[derive(thiserror::Error, Debug)]
 pub enum CpuErr {

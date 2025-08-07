@@ -47,7 +47,7 @@ impl Emulator {
         let mut inst = 0;
         let pc = self.cpu.get_reg(cpu::RegType::ProgCounter, 0)?;
         
-        let inst_l = self.mmu.dram_read(999999999999 as usize, 4)?;
+        let inst_l = self.mmu.dram_read(pc as usize, 4)?;
     
         //coz little endian
         for (i, val) in inst_l.iter().enumerate() {

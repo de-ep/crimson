@@ -1,6 +1,6 @@
 const SIZE_INSTRUCTION_TYPE_LOOKUP_TABLE: usize = 128;
 
-
+//we need to make this shit more robust
 #[derive(Debug, Clone, Copy)]
 pub enum InstType {
     R,
