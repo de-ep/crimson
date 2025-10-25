@@ -171,6 +171,9 @@ pub fn decode(inst: u32) -> Inst {
 
                 //incase inst has shamt 
                 let shamt = (inst >> 20) & 0b1111_1; 
+                let shamt_5 = shamt & 0b1111_1;
+                let shamt_6 = shamt & 0b1111_11; 
+
                 let funct7 = (inst >> 25) & 0b1111_111;
 
                 //sign extending imm
@@ -199,11 +202,11 @@ pub fn decode(inst: u32) -> Inst {
                             0b100 => return Inst::Xori  { rd: rd, rs1: rs1, imm: imm },
                             0b110 => return Inst::Ori  { rd: rd, rs1: rs1, imm: imm },
                             0b111 => return Inst::Andi { rd: rd, rs1: rs1, imm: imm },
-                            0b001 => return Inst::Slli { rd: rd, rs1: rs1, shamt: shamt },
+                            0b001 => return Inst::Slli { rd: rd, rs1: rs1, shamt: shamt_6 },
                             0b101 => {
                                 match funct7 {
-                                    0b0000000 => return Inst::Srli { rd: rd, rs1: rs1, shamt: shamt },
-                                    0b0100000 => return Inst::Srai { rd: rd, rs1: rs1, shamt: shamt },
+                                    0b0000000 => return Inst::Srli { rd: rd, rs1: rs1, shamt: shamt_6 },
+                                    0b0100000 => return Inst::Srai { rd: rd, rs1: rs1, shamt: shamt_6 },
                                     _=> return Inst::Undefined
                                 }
                             }
@@ -238,11 +241,11 @@ pub fn decode(inst: u32) -> Inst {
                     0b0011011 => {
                         match funct3 {
                             0b000 => return Inst::Addiw { rd: rd, rs1: rs1, imm: imm },
-                            0b001 => return Inst::Slliw { rd: rd, rs1: rs1, shamt: shamt },
+                            0b001 => return Inst::Slliw { rd: rd, rs1: rs1, shamt: shamt_5 },
                             0b101 => {
                                 match funct7 >> 5 {
-                                    0b0000000 => return Inst::Srliw { rd: rd, rs1: rs1, shamt: shamt },
-                                    0b0100000 => return Inst::Sraiw { rd: rd, rs1: rs1, shamt: shamt },
+                                    0b0000000 => return Inst::Srliw { rd: rd, rs1: rs1, shamt: shamt_5 },
+                                    0b0100000 => return Inst::Sraiw { rd: rd, rs1: rs1, shamt: shamt_5 },
                                     _=> return Inst::Undefined,
                                 }
                             }
