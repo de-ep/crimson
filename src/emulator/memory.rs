@@ -1,5 +1,5 @@
-const DRAM_SIZE: usize = 1024 * 1024;       //1MB
-const MAX_DRAM_SIZE: usize = DRAM_SIZE * 8;
+const DRAM_SIZE_INITIAL: usize = 1024 * 1024;           //1MB
+const DRAM_SIZE_MAX: usize = DRAM_SIZE_INITIAL * 8;
 
 pub const PERM_R: u8 = 1;
 pub const PERM_W: u8 = 1 << 1;
@@ -31,7 +31,7 @@ macro_rules! bound_check {
 macro_rules! bound_check_and_resize {
     ($end: expr, $mmu: expr) => {{
         while let Err(_) = bound_check!($end, $mmu.dram.len()) {
-            if $mmu.dram.len() * 2 <= MAX_DRAM_SIZE {
+            if $mmu.dram.len() * 2 <= DRAM_SIZE_MAX {
                 $mmu.dram.resize($mmu.dram.len() * 2, 0);
                 $mmu.perm.resize($mmu.perm.len() * 2, 0);
             }
@@ -47,8 +47,8 @@ macro_rules! bound_check_and_resize {
 impl Mmu {
     pub fn new() -> Self {
         Mmu {
-            dram: vec![0; DRAM_SIZE],
-            perm: vec![0; DRAM_SIZE],
+            dram: vec![0; DRAM_SIZE_INITIAL],
+            perm: vec![0; DRAM_SIZE_INITIAL],
         }
     }
 

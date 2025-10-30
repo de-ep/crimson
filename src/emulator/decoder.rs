@@ -170,7 +170,7 @@ pub fn decode(inst: u32) -> Inst {
                 let imm = (inst >> 20) &0b1111_1111_1111 ;
 
                 //incase inst has shamt 
-                let shamt = (inst >> 20) & 0b1111_1; 
+                let shamt = inst >> 20;
                 let shamt_5 = shamt & 0b1111_1;
                 let shamt_6 = shamt & 0b1111_11; 
 

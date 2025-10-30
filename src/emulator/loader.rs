@@ -265,7 +265,6 @@ mod elf_loader {
         if elf.elf_header.e_entry == 0 {
             return  Err(LoaderErr::UnsupportedFileType);
         }
-        //also bound check the EP
 
 
         //loading program
@@ -289,7 +288,7 @@ mod elf_loader {
 
                     }
 
-                    if size_in_mem - size_in_file > 0 {
+                    if size_in_mem > size_in_file {
                         let vaddr: usize = dest + size_in_file;
                         let size: usize = size_in_mem - size_in_file;
 
