@@ -350,6 +350,10 @@ pub fn decode(inst: u32) -> Inst {
     return Inst::Undefined
 }
 
+pub fn disassemble(inst: Inst) {
+    
+}
+
 const INSTRUCTION_TYPE_LOOKUP_TABLE: [Option<InstType>; SIZE_INSTRUCTION_TYPE_LOOKUP_TABLE] = [
     /*        0 */ None,
     /*        1 */ None,

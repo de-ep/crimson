@@ -7,10 +7,9 @@ mod exceptions;
 use std::path::Path;
 use memory::Mmu;
 use cpu::Cpu;
-use thiserror::Error;
+use exceptions::Exceptions;
 
-
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum EmulatorErr {
     #[error("Loader error: {0}")]
     ErrLoader(#[from] loader::LoaderErr),
@@ -20,6 +19,9 @@ pub enum EmulatorErr {
 
     #[error("MMU error: {0}")]
     ErrMmu(#[from] memory::MmmuErr),
+
+    #[error("Exception Handler error: {0}")]
+    ErrExceptionHandler(#[from] exceptions::ExceptionHandlerErr),
 }
 
 struct Emulator {
@@ -49,7 +51,7 @@ impl Emulator {
         let mut inst = 0;
         let pc = self.cpu.get_reg(cpu::RegType::ProgCounter, 0)?;
         
-        let inst_l = self.mmu.dram_read(pc as usize, 4)?;
+        let inst_l = self.mmu.dram_read(pc as usize, cpu::RAW_INST_SIZE as usize)?;
     
         //coz little endian
         for (i, val) in inst_l.iter().enumerate() {
@@ -71,17 +73,24 @@ impl Emulator {
 
         //checking alignment
         if pc % 4 != 0 {
-            todo!("exception align ");
+            self.handle_exception(Exceptions::ExceptionInstructionAddressMisaligned(pc as usize))?;
         }
   
-        
         //FDE
         let rinst = self.fetch_rinst()?;
-        let inst_type = decoder::fetch_inst_type(rinst);
         let inst = decoder::decode(rinst);
+        cpu::exec(self, inst)?;
 
-        cpu::exec(self, inst, inst_type)?;
+        
+        Ok(())
+    }
 
+    fn handle_exception(&self, exception: Exceptions) -> Result<(), EmulatorErr> {
+        let continue_execution = exceptions::handle_expection(exception)?;
+
+        if !continue_execution {
+            println!();
+        }
 
         Ok(())
     }
@@ -97,9 +106,11 @@ pub fn emulate() {
             println!("{:?}", decoder::decode(rinst));
             let inst = decoder::decode(rinst);
             
+            println!("hii");
             if let Err(err) = emu.exec() {
-                println!("{:?}", err);
+                println!("nohi{:?}", err);
             }
+  
             
         }
         else if let Err(err) = emu.fetch_rinst() {
