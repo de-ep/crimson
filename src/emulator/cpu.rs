@@ -95,6 +95,23 @@ fn handle_undefined() {
         [it this for software running in execution env, so it should be implemented here]
 */
 
+macro_rules! get_circular_mem_vaddr {
+    ($vaddr: expr, $dram_len: expr) => {
+        if $dram_len <= $vaddr {
+            $vaddr - $dram_len
+        } else {
+            $vaddr
+        }
+    };
+}
+
+
+/*
+    2.1. Programmers' Model for Base Integer ISA
+        The standard software calling convention uses register x1 to hold the return address for a call, 
+        with register x5 available as an alternate link register.
+        The standard calling convention uses register x2 as the stack pointer.
+*/
 
 pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
     let inc_pc = true;
@@ -102,7 +119,8 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
     match inst {
                 
         /*
-            2.4.1. Integer Register-Immediate Instructions
+            2.4.1. Integer Register-Immediate Instructions & 
+            4.2.1. Integer Register-Immediate Instructions
         */
     
         Inst::Addi { rd, rs1, imm } => {
@@ -121,8 +139,8 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
 
         Inst::Addiw { rd, rs1, imm } => {
               
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as u32;
-            let value = rs1_val.wrapping_add_signed(imm);
+            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i32;
+            let value = rs1_val.wrapping_add(imm) as i64;
                  
             emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
         }
@@ -132,14 +150,13 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
                 SLTI (set less than immediate) places the value 1 in register rd if register rs1 is less than the sign-
                 extended immediate when both are treated as signed numbers, else 0 is written to rd.
             */
-                      
-                 
+
             let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i64;
             let imm = imm as i64;
 
-            let value = if rs1_val < imm { 1 } else { 0 };
+            let value = rs1_val < imm ;
             
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value)?;     
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;     
         }
 
         Inst::Sltiu { rd, rs1, imm } => {
@@ -213,7 +230,7 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
                   
             let value  = rs1_val << shamt; 
                  
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as i32 as i64 as u64)?;
         }
          
         Inst::Srli { rd, rs1, shamt } => {
@@ -231,7 +248,7 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
             
             let value  = rs1_val >> shamt;
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as i32 as i64 as u64)?;
         }
 
         Inst::Srai { rd, rs1, shamt } => {
@@ -272,6 +289,156 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
             let value = ((imm as i64) << 12) + emu.cpu.pc as i64;
             emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
         }
+
+        /*
+            2.4.2. Integer Register-Register Operations &
+            4.2.2. Integer Register-Register Operations
+        */
+
+            /*
+                ADD performs the addition of rs1 and rs2. 
+                SUB performs the subtraction of rs2 from rs1. 
+                
+                Overflows are ignored and the low XLEN bits of results are written to the destination rd. 
+            */
+
+        Inst::Add { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)?;
+
+            let value = rs1_val.wrapping_add(rs2_val);
+
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value)?;
+        }
+
+        Inst::Sub { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)?;
+
+            let value = rs1_val.wrapping_sub(rs2_val);
+
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value)?;
+        }
+
+            /*
+                ADDW and SUBW are RV64I-only instructions that are defined analogously to ADD and SUB but
+                operate on 32-bit values and produce signed 32-bit results. Overflows are ignored, and the low 32-bits
+                of the result is sign-extended to 64-bits and written to the destination register.
+            */
+
+
+        Inst::Addw { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i32;
+            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as i32;
+
+            let value = rs1_val.wrapping_add(rs2_val) as i64;
+
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+        }
+
+        Inst::Subw { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i32;
+            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as i32;
+
+            let value = rs1_val.wrapping_sub(rs2_val) as i64;
+
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+        }
+    
+            /*
+                SLT and SLTU perform signed and unsigned compares respectively, writing 1 to rd if rs1 < rs2, 0 otherwise.
+            */
+
+        Inst::Slt { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i64;
+            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as i64;
+
+            let value = rs1_val < rs2_val;
+
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+        }
+
+        Inst::Sltu { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)?;
+
+            let value = rs1_val < rs2_val;
+
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+        }
+
+            /*
+                SLL, SRL, and SRA perform logical left, logical right, and arithmetic right shifts on the value in
+                register rs1 by the shift amount held in register rs2.
+                In RV64I, only the low 6 bits of rs2 are considered for the shift amount.
+            */
+
+        Inst::Sll { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)?;
+
+            let value = rs1_val << (rs2_val & 0b1111_11);
+
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value)?;
+
+        }
+
+        Inst::Srl { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)?;
+
+            let value = rs1_val >> (rs2_val & 0b1111_11);
+
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value)?;
+
+        }
+
+        Inst::Sra { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i64;
+            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as i64;
+
+            let value = rs1_val >> (rs2_val & 0b1111_11);
+
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+
+        }
+
+        /*
+            SLLW, SRLW, and SRAW are RV64I-only instructions that are analogously defined but operate on
+            32-bit values and sign-extend their 32-bit results to 64 bits.
+            The shift amount is given by rs2[4:0]. 
+        */
+
+        Inst::Sllw { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as u32;
+            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as u32;
+
+            let value = rs1_val << (rs2_val & 0b1111_1);
+
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as i32 as i64 as u64)?;
+
+        }
+
+        Inst::Srlw { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as u32;
+            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as u32;
+
+            let value = rs1_val >> (rs2_val & 0b1111_1);
+
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as i32 as i64 as u64)?;
+
+        }
+
+        Inst::Sraw { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i32;
+            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as i32;
+
+            let value = rs1_val >> (rs2_val & 0b1111_1);
+
+            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as i64 as u64)?;
+
+        }
+
 
 
         _=> handle_undefined()
