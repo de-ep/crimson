@@ -12,6 +12,7 @@ pub enum MmmuErr {
     IndexOutOfBounds(usize),
 }
 
+#[derive(Clone)]
 pub struct Mmu {
     dram: Vec<u8>,
     perm: Vec<u8>,

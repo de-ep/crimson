@@ -24,6 +24,7 @@ pub enum EmulatorErr {
     ErrExceptionHandler(#[from] exceptions::ExceptionHandlerErr),
 }
 
+#[derive(Clone)]
 struct Emulator {
     cpu: Cpu,
     mmu: Mmu,
@@ -37,19 +38,26 @@ impl Emulator {
         }
     }
 
-    fn load<P: AsRef<Path>>(&mut self, file: &P) -> Result<(), EmulatorErr>{
-        let pc_val = loader::load_file_to_dram(&mut self.mmu, &file)? as u64;
+    pub fn take_snapshot(&self) -> Emulator{
+        self.clone()
 
-        self.cpu.set_reg(cpu::RegType::ProgCounter, 0, pc_val)?;
+    }
 
-        Ok(())
+    fn load<P: AsRef<Path>>(&mut self, file: &P) -> Result<loader::File, EmulatorErr>{
+        let file = loader::load_file_to_dram(&mut self.mmu, &file)?;
+
+        let pc_val = file.entry_point;
+
+        self.cpu.set_pc(pc_val);
+
+        Ok(file)
     }
 
     fn fetch_rinst(&self) -> Result<u32, EmulatorErr>{
         //do not throw any exception for fetch coz of perms according to: 1.4. Memory
 
         let mut inst = 0;
-        let pc = self.cpu.get_reg(cpu::RegType::ProgCounter, 0)?;
+        let pc = self.cpu.get_pc();
         
         let inst_l = self.mmu.dram_read(pc as usize, cpu::RAW_INST_SIZE as usize)?;
     
@@ -63,7 +71,7 @@ impl Emulator {
 
     fn exec(&mut self) -> Result<(), EmulatorErr> {
         
-        let pc = self.cpu.get_reg(cpu::RegType::ProgCounter, 0)?;
+        let pc = self.cpu.get_pc();
         let perms = self.mmu.perm_get(pc as usize, cpu::RAW_INST_SIZE as usize)?;
 
         //checking if PC points to executable memory
@@ -100,7 +108,7 @@ impl Emulator {
 pub fn emulate() {
     let mut emu = Emulator::new();
     //println!("{:?}", decoder::decode(0x7369));
-    if let Ok(()) = emu.load(&"/home/Deep/Desktop/emu/temp") {
+    if let Ok(file) = emu.load(&"/home/Deep/Desktop/emu/temp") {
         if let Ok(rinst) = emu.fetch_rinst() {
             println!("{0:x?}", rinst);
             println!("{:?}", decoder::decode(rinst));

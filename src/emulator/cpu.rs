@@ -12,11 +12,7 @@ pub enum CpuErr {
     InvalidInstruction(u32),
 }
 
-pub enum RegType {
-    GenPurpose,
-    ProgCounter,
-}
-
+#[derive(Clone)]
 pub struct Cpu {
     r: [u64; MAX_REGS],
     pc: u64,
@@ -30,56 +26,49 @@ impl Cpu {
         }
     }
 
-    pub fn get_reg(&self, rtype: RegType, reg_index: usize) -> Result<u64, CpuErr> {
-        match rtype {
-            RegType::GenPurpose => {
-                if reg_index >= MAX_REGS {
-                    return Err(CpuErr::InvalidRegister(reg_index));
-                }
-
-                Ok(self.r[reg_index])
-            }
-            RegType::ProgCounter => {
-                Ok(self.pc)
-            }
+    pub fn get_reg(&self, reg_index: usize) -> Result<u64, CpuErr> {
+        if reg_index >= MAX_REGS {
+            return Err(CpuErr::InvalidRegister(reg_index));
         }
         
+        Ok(self.r[reg_index])
     }
 
-    pub fn set_reg(&mut self, rtype: RegType, reg_index: usize, value: u64) -> Result<(), CpuErr>{
-        match rtype {
-            RegType::GenPurpose => {
-                
-                //since X0 is hardwired to zero
-                if reg_index == 0 {
-                    return Ok(());
-                }
-                if reg_index >= MAX_REGS {
-                    return Err(CpuErr::InvalidRegister(reg_index));
-                }
-
-                self.r[reg_index] = value;
-            }
-            RegType::ProgCounter => {
-                self.pc = value;
-            }
+    pub fn set_reg(&mut self, reg_index: usize, value: u64) -> Result<(), CpuErr>{
+        //since X0 is hardwired to zero
+        if reg_index == 0 {
+            return Ok(());
+        }
+        if reg_index >= MAX_REGS {
+            return Err(CpuErr::InvalidRegister(reg_index));
         }
         
+        self.r[reg_index] = value;
+            
+  
         Ok(())
+    }
+
+    pub fn get_pc(&self) -> u64 {
+        self.pc
+    }
+
+    pub fn set_pc(&mut self, val: u64) {
+        self.pc = val;
     }
 
 }
 
 macro_rules! inc_pc {
     ($cpu: expr) => {
-      $cpu.pc += RAW_INST_SIZE;  
+        $cpu.set_pc($cpu.get_pc() + RAW_INST_SIZE);
     
     };
 }
 
 macro_rules! dec_pc {
     ($cpu: expr) => {
-      $cpu.pc -= RAW_INST_SIZE;  
+        $cpu.set_pc($cpu.get_pc() - RAW_INST_SIZE);
     
     };
 }
@@ -130,19 +119,19 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
                 assembler pseudoinstruction.
             */
 
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
             
             let value = rs1_val.wrapping_add_signed(imm as i64);
             
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value)?;
+            emu.cpu.set_reg(rd as usize, value)?;
         }
 
         Inst::Addiw { rd, rs1, imm } => {
               
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i32;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i32;
             let value = rs1_val.wrapping_add(imm) as i64;
                  
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(rd as usize, value as u64)?;
         }
                  
         Inst::Slti { rd, rs1, imm } => {
@@ -151,12 +140,12 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
                 extended immediate when both are treated as signed numbers, else 0 is written to rd.
             */
 
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i64;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i64;
             let imm = imm as i64;
 
             let value = rs1_val < imm ;
             
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;     
+            emu.cpu.set_reg(rd as usize, value as u64)?;     
         }
 
         Inst::Sltiu { rd, rs1, imm } => {
@@ -167,13 +156,13 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
                 sets rd to 0 (assembler pseudoinstruction SEQZ rd, rs). 
             */
                                  
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
             let imm = imm as i64 as u64;
                                         
             let value = if rs1_val < imm { 1 } else { 0 };
                                                  
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value)?;
+            emu.cpu.set_reg(rd as usize, value)?;
         }
                       
             /* 
@@ -184,29 +173,29 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
                   
         Inst::Andi { rd, rs1, imm } => {
                              
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i64;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i64;
                       
             let value = rs1_val & imm as i64;
                              
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(rd as usize, value as u64)?;
         }
 
         Inst::Ori { rd, rs1, imm } => {
 
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i64;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i64;
 
             let value = rs1_val | imm as i64;
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(rd as usize, value as u64)?;
         }
 
         Inst::Xori { rd, rs1, imm } => {
 
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i64;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i64;
                                                
             let value = rs1_val ^ imm as i64;
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(rd as usize, value as u64)?;
         }
 
             /*
@@ -217,56 +206,56 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
 
         Inst::Slli { rd, rs1, shamt } => {
             
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
                             
             let value  = rs1_val << shamt; 
                                     
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value)?;
+            emu.cpu.set_reg(rd as usize, value)?;
         }
 
         Inst::Slliw { rd, rs1, shamt } => {
                
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as u32;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as u32;
                   
             let value  = rs1_val << shamt; 
                  
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as i32 as i64 as u64)?;
+            emu.cpu.set_reg(rd as usize, value as i32 as i64 as u64)?;
         }
          
         Inst::Srli { rd, rs1, shamt } => {
              
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
              
             let value  = rs1_val >> shamt; 
              
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value)?;
+            emu.cpu.set_reg(rd as usize, value)?;
         }
 
         Inst::Srliw { rd, rs1, shamt } => {
         
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as u32;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as u32;
             
             let value  = rs1_val >> shamt;
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as i32 as i64 as u64)?;
+            emu.cpu.set_reg(rd as usize, value as i32 as i64 as u64)?;
         }
 
         Inst::Srai { rd, rs1, shamt } => {
             
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i64;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i64;
               
             let value  = rs1_val >> shamt; 
             
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(rd as usize, value as u64)?;
         }
 
         Inst::Sraiw { rd, rs1, shamt } => {
 
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i64 as i32;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i32;
 
             let value  = rs1_val >> shamt; 
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as i64 as u64)?;
+            emu.cpu.set_reg(rd as usize, value as i64 as u64)?;
         }
 
         Inst::Lui { rd, imm } => {
@@ -276,7 +265,7 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
             */
         
             let value = (imm as i64) << 12; 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(rd as usize, value as u64)?;
         }
         
         Inst::Auipc { rd, imm } => {
@@ -287,7 +276,7 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
             */
             
             let value = ((imm as i64) << 12) + emu.cpu.pc as i64;
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(rd as usize, value as u64)?;
         }
 
         /*
@@ -303,21 +292,21 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
             */
 
         Inst::Add { rd, rs1, rs2 } => {
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
-            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)?;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)?;
 
             let value = rs1_val.wrapping_add(rs2_val);
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value)?;
+            emu.cpu.set_reg(rd as usize, value)?;
         }
 
         Inst::Sub { rd, rs1, rs2 } => {
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
-            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)?;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)?;
 
             let value = rs1_val.wrapping_sub(rs2_val);
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value)?;
+            emu.cpu.set_reg(rd as usize, value)?;
         }
 
             /*
@@ -328,21 +317,21 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
 
 
         Inst::Addw { rd, rs1, rs2 } => {
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i32;
-            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as i32;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i32;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)? as i32;
 
             let value = rs1_val.wrapping_add(rs2_val) as i64;
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(rd as usize, value as u64)?;
         }
 
         Inst::Subw { rd, rs1, rs2 } => {
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i32;
-            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as i32;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i32;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)? as i32;
 
             let value = rs1_val.wrapping_sub(rs2_val) as i64;
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(rd as usize, value as u64)?;
         }
     
             /*
@@ -350,21 +339,21 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
             */
 
         Inst::Slt { rd, rs1, rs2 } => {
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i64;
-            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as i64;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i64;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)? as i64;
 
             let value = rs1_val < rs2_val;
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(rd as usize, value as u64)?;
         }
 
         Inst::Sltu { rd, rs1, rs2 } => {
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
-            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)?;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)?;
 
             let value = rs1_val < rs2_val;
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(rd as usize, value as u64)?;
         }
 
             /*
@@ -374,32 +363,32 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
             */
 
         Inst::Sll { rd, rs1, rs2 } => {
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
-            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)?;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)?;
 
             let value = rs1_val << (rs2_val & 0b1111_11);
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value)?;
+            emu.cpu.set_reg(rd as usize, value)?;
 
         }
 
         Inst::Srl { rd, rs1, rs2 } => {
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)?;
-            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)?;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)?;
 
             let value = rs1_val >> (rs2_val & 0b1111_11);
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value)?;
+            emu.cpu.set_reg(rd as usize, value)?;
 
         }
 
         Inst::Sra { rd, rs1, rs2 } => {
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i64;
-            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as i64;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i64;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)? as i64;
 
             let value = rs1_val >> (rs2_val & 0b1111_11);
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as u64)?;
+            emu.cpu.set_reg(rd as usize, value as u64)?;
 
         }
 
@@ -410,32 +399,32 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
         */
 
         Inst::Sllw { rd, rs1, rs2 } => {
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as u32;
-            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as u32;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as u32;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)? as u32;
 
             let value = rs1_val << (rs2_val & 0b1111_1);
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as i32 as i64 as u64)?;
+            emu.cpu.set_reg(rd as usize, value as i32 as i64 as u64)?;
 
         }
 
         Inst::Srlw { rd, rs1, rs2 } => {
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as u32;
-            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as u32;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as u32;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)? as u32;
 
             let value = rs1_val >> (rs2_val & 0b1111_1);
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as i32 as i64 as u64)?;
+            emu.cpu.set_reg(rd as usize, value as i32 as i64 as u64)?;
 
         }
 
         Inst::Sraw { rd, rs1, rs2 } => {
-            let rs1_val = emu.cpu.get_reg(RegType::GenPurpose, rs1 as usize)? as i32;
-            let rs2_val = emu.cpu.get_reg(RegType::GenPurpose, rs2 as usize)? as i32;
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i32;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)? as i32;
 
             let value = rs1_val >> (rs2_val & 0b1111_1);
 
-            emu.cpu.set_reg(RegType::GenPurpose, rd as usize, value as i64 as u64)?;
+            emu.cpu.set_reg(rd as usize, value as i64 as u64)?;
 
         }
 

@@ -5,6 +5,12 @@ pub enum ExceptionHandlerErr {}
 pub enum Exceptions {
     #[error("Instruction address misaligned: {0}")]
     ExceptionInstructionAddressMisaligned(usize),
+    
+    #[error("[Placeholder]: {0}")]
+    ExceptionAccessFault(usize),
+
+    #[error("[Placeholder]: {0}")]
+    ExceptionPageFault(usize),
 }
 
 

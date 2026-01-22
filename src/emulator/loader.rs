@@ -1,12 +1,18 @@
-use std::{fs, io::Error, path::Path};
+use std::{fs, io::Error, path::{self, Path}};
 use super::memory::{self, Mmu};
 use thiserror::Error;
 
 const MAGIC_ELF: [u8; 4] = [0x7F, 0x45, 0x4C, 0x46];        //.ELF
 
-enum FileType {
+pub enum FileType {
     Elf,
 }
+
+pub struct File {
+    pub file_type: FileType, 
+    pub entry_point: u64,
+}
+
 
 #[derive(Error, Debug)]
 pub enum LoaderErr {
@@ -23,7 +29,7 @@ pub enum LoaderErr {
     DramIoFail(#[from] memory::MmmuErr),
 }
 
-pub fn load_file_to_dram<P: AsRef<Path>>(mmu: &mut Mmu, file: &P) -> Result<usize, LoaderErr> {
+pub fn load_file_to_dram<P: AsRef<Path>>(mmu: &mut Mmu, file: &P) -> Result<File, LoaderErr> {
     let data = fs::read(file)?;
 
     if data.len() > MAGIC_ELF.len() {
@@ -38,7 +44,8 @@ pub fn load_file_to_dram<P: AsRef<Path>>(mmu: &mut Mmu, file: &P) -> Result<usiz
 
 mod elf_loader {
     use crate::emulator::memory::{self, Mmu};
-    use crate::emulator::loader::LoaderErr;
+    use super::LoaderErr;
+    use super::{File, FileType};
 
     const EI_NIDENT: usize = 16;
     const EI_CLASS: usize = 4;
@@ -243,7 +250,7 @@ mod elf_loader {
     }
 
 
-    pub fn load_elf_to_dram(mmu: &mut Mmu, data: &[u8]) -> Result<usize, LoaderErr> {
+    pub fn load_elf_to_dram(mmu: &mut Mmu, data: &[u8]) -> Result<File, LoaderErr> {
         let elf = parse_elf(data)?;
 
         
@@ -310,7 +317,12 @@ mod elf_loader {
                     mmu.perm_set(dest, size_in_mem, perm)?;
                 }
             }
-            Ok(elf.elf_header.e_entry as usize)
+            Ok(
+                File {
+                    file_type: FileType::Elf,
+                    entry_point: elf.elf_header.e_entry,
+                }
+            )
         }
         else {
             Err(LoaderErr::InvalidFile)
