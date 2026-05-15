@@ -38,7 +38,7 @@ impl Emulator {
         }
     }
 
-    pub fn take_snapshot(&self) -> Emulator{
+    pub fn take_snapshot(&self) -> Self{
         self.clone()
 
     }

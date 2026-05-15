@@ -1,4 +1,6 @@
-use super::{decoder::Inst, Emulator};
+use std::u64;
+
+use super::{decoder::Inst, exceptions, Emulator};
 
 pub const MAX_REGS: usize = 32;
 pub const RAW_INST_SIZE:u64 = 4;
@@ -59,18 +61,12 @@ impl Cpu {
 
 }
 
-macro_rules! inc_pc {
-    ($cpu: expr) => {
-        $cpu.set_pc($cpu.get_pc() + RAW_INST_SIZE);
-    
-    };
+fn inc_pc(cpu: &mut Cpu) {
+    cpu.set_pc(cpu.get_pc() + RAW_INST_SIZE);
 }
 
-macro_rules! dec_pc {
-    ($cpu: expr) => {
-        $cpu.set_pc($cpu.get_pc() - RAW_INST_SIZE);
-    
-    };
+fn dec_pc(cpu: &mut Cpu) {
+    cpu.set_pc(cpu.get_pc() - RAW_INST_SIZE);
 }
 
 fn handle_undefined() {
@@ -84,16 +80,13 @@ fn handle_undefined() {
         [it this for software running in execution env, so it should be implemented here]
 */
 
-macro_rules! get_circular_mem_vaddr {
-    ($vaddr: expr, $dram_len: expr) => {
-        if $dram_len <= $vaddr {
-            $vaddr - $dram_len
-        } else {
-            $vaddr
-        }
-    };
-}
+fn get_circular_mem_vaddr(vaddr: usize, dram_len: usize) -> usize {
+    if dram_len <= vaddr {
+        return vaddr - dram_len;
+    }
 
+    vaddr
+}
 
 /*
     2.1. Programmers' Model for Base Integer ISA
@@ -103,7 +96,7 @@ macro_rules! get_circular_mem_vaddr {
 */
 
 pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
-    let inc_pc = true;
+    let mut increment_program_counter = true;
 
     match inst {
                 
@@ -275,8 +268,8 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
                 offset to the address of the AUIPC instruction, then places the result in register rd.
             */
             
-            let value = ((imm as i64) << 12) + emu.cpu.pc as i64;
-            emu.cpu.set_reg(rd as usize, value as u64)?;
+            let value = emu.cpu.pc.wrapping_add_signed((imm as i64) << 12);
+            emu.cpu.set_reg(rd as usize, value)?;
         }
 
         /*
@@ -392,11 +385,11 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
 
         }
 
-        /*
-            SLLW, SRLW, and SRAW are RV64I-only instructions that are analogously defined but operate on
-            32-bit values and sign-extend their 32-bit results to 64 bits.
-            The shift amount is given by rs2[4:0]. 
-        */
+            /*
+                SLLW, SRLW, and SRAW are RV64I-only instructions that are analogously defined but operate on
+                32-bit values and sign-extend their 32-bit results to 64 bits.
+                The shift amount is given by rs2[4:0]. 
+            */
 
         Inst::Sllw { rd, rs1, rs2 } => {
             let rs1_val = emu.cpu.get_reg(rs1 as usize)? as u32;
@@ -429,13 +422,180 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
         }
 
 
+        /*
+            2.5. Control Transfer Instructions
+        */
+
+            /* 
+                JAL stores the
+                address of the instruction following the jump ('pc'+4) into register rd.
+            */
+
+        Inst::Jal { rd, imm } => {
+            let pc = emu.cpu.get_pc();
+            
+            let return_address = pc + 4;
+            emu.cpu.set_reg(rd as usize, return_address as u64)?;
+            
+            let value = pc.wrapping_add_signed(imm as i64);
+            emu.cpu.set_pc(value);
+
+            increment_program_counter = false;
+        }
+
+            /* 
+                Jalr
+                The target address is obtained by adding the immediate to the register rs1, 
+                then setting the least-significant bit of the result to zero.
+
+                The address of the instruction following the jump (pc+4) is written to register rd 
+            */
+
+        Inst::Jalr { rd, rs1, imm } => {
+            let pc = emu.cpu.get_pc();
+            
+            let return_address = pc + 4;
+            emu.cpu.set_reg(rd as usize, return_address)?;
+            
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
+            let value = (rs1_val.wrapping_add_signed(imm as i64)) & !1;
+
+            emu.cpu.set_pc(value);
+
+            increment_program_counter = false;
+        }
+
+            /*
+                BEQ and BNE take the branch if registers rs1 and rs2 are equal or unequal respectively
+                BLT and BLTU take the branch if rs1 is less than rs2, using signed and unsigned comparison respectively. 
+                BGE and BGEU take the branch if rs1 is greater than or equal to rs2, using signed and unsigned comparison respectively.
+            */
+        
+        Inst::Beq { rs1, rs2, imm } => {
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)?;
+            
+            if rs1_val == rs2_val {
+                let value = emu.cpu.get_pc().wrapping_add_signed(imm as i64);
+            
+                emu.cpu.set_pc(value);
+
+                increment_program_counter = false;
+            }
+
+        }
+        
+        Inst::Bne { rs1, rs2, imm } => {
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)?;
+            
+            if rs1_val != rs2_val {
+                let value = emu.cpu.get_pc().wrapping_add_signed(imm as i64);
+            
+                emu.cpu.set_pc(value);
+
+                increment_program_counter = false;
+            }
+
+        }
+
+        Inst::Blt { rs1, rs2, imm } => {
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i64;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)? as i64;
+            
+            if rs1_val < rs2_val {
+                let value = emu.cpu.get_pc().wrapping_add_signed(imm as i64);
+            
+                emu.cpu.set_pc(value);
+
+                increment_program_counter = false;
+            }
+
+        }
+
+        Inst::Bltu { rs1, rs2, imm } => {
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)?;
+            
+            if rs1_val < rs2_val {
+                let value = emu.cpu.get_pc().wrapping_add_signed(imm as i64);
+            
+                emu.cpu.set_pc(value);
+
+                increment_program_counter = false;
+            }
+
+        }
+
+        Inst::Bge { rs1, rs2, imm } => {
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)? as i64;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)? as i64;
+            
+            if rs1_val >= rs2_val {
+                let value = emu.cpu.get_pc().wrapping_add_signed(imm as i64);
+            
+                emu.cpu.set_pc(value);
+
+                increment_program_counter = false;
+            }
+
+        }
+
+        Inst::Bgeu { rs1, rs2, imm } => {
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)?;
+            
+            if rs1_val >= rs2_val {
+                let value = emu.cpu.get_pc().wrapping_add_signed(imm as i64);
+            
+                emu.cpu.set_pc(value);
+
+                increment_program_counter = false;
+            }
+
+        }
+
 
         _=> handle_undefined()
     }
 
-    if inc_pc {
-        inc_pc!(emu.cpu);
+    if increment_program_counter {
+        inc_pc(&mut emu.cpu);
     }
 
     Ok(())
 }
+
+
+const X0: usize = 0;
+const X1: usize = 1;
+const X2: usize = 2;
+const X3: usize = 3;
+const X4: usize = 4;
+const X5: usize = 5;
+const X6: usize = 6;
+const X7: usize = 7;
+const X8: usize = 8;
+const X9: usize = 9;
+const X10: usize = 10;
+const X11: usize = 11;
+const X12: usize = 12;
+const X13: usize = 13;
+const X14: usize = 14;
+const X15: usize = 15;
+const X16: usize = 16;
+const X17: usize = 17;
+const X18: usize = 18;
+const X19: usize = 19;
+const X20: usize = 20;
+const X21: usize = 21;
+const X22: usize = 22;
+const X23: usize = 23;
+const X24: usize = 24;
+const X25: usize = 25;
+const X26: usize = 26;
+const X27: usize = 27;
+const X28: usize = 28;
+const X29: usize = 29;
+const X30: usize = 30;
+const X31: usize = 31;

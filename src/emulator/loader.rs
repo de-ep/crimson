@@ -1,4 +1,4 @@
-use std::{fs, io::Error, path::{self, Path}};
+use std::{fs, path::Path};
 use super::memory::{self, Mmu};
 use thiserror::Error;
 
@@ -264,7 +264,7 @@ mod elf_loader {
             return  Err(LoaderErr::UnsupportedFileType);
         }
 
-        //e_machine TODO
+        //e_machine
         if elf.elf_header.e_machine != EM_RISCV {
             return  Err(LoaderErr::UnsupportedFileType);
         }
@@ -317,7 +317,7 @@ mod elf_loader {
                     mmu.perm_set(dest, size_in_mem, perm)?;
                 }
             }
-            Ok(
+            Ok (
                 File {
                     file_type: FileType::Elf,
                     entry_point: elf.elf_header.e_entry,
