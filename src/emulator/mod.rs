@@ -7,7 +7,7 @@ mod exceptions;
 use std::path::Path;
 use memory::Mmu;
 use cpu::Cpu;
-use exceptions::Exceptions;
+use exceptions::{handle_expection, Exceptions};
 
 #[derive(thiserror::Error, Debug)]
 pub enum EmulatorErr {
@@ -71,12 +71,12 @@ impl Emulator {
 
     fn exec(&mut self) -> Result<(), EmulatorErr> {
         
-        let pc = self.cpu.get_pc();
-        let perms = self.mmu.perm_get(pc as usize, cpu::RAW_INST_SIZE as usize)?;
+        let pc = self.cpu.get_pc() as usize;
+        let perms = self.mmu.perm_get(pc, cpu::RAW_INST_SIZE as usize)?;
 
         //checking if PC points to executable memory
-        if perms.iter().all(|perm| perm & memory::PERM_X == 0) {
-            todo!("exception perm");
+        if perms.iter().any(|perm| perm & memory::PERM_X == 0) {
+            handle_expection(Exceptions::ExceptionAccessFault(pc))?;
         }    
 
         //checking alignment

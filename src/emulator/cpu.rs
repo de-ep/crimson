@@ -1,6 +1,6 @@
 use std::u64;
 
-use super::{decoder::Inst, exceptions, Emulator};
+use super::{decoder::Inst, exceptions, memory::{self, PERM_R, PERM_W}, Emulator};
 
 pub const MAX_REGS: usize = 32;
 pub const RAW_INST_SIZE:u64 = 4;
@@ -12,6 +12,15 @@ pub enum CpuErr {
 
     #[error("Invalid instruction: {0}")]
     InvalidInstruction(u32),
+
+    #[error("Read Access Fault: offset: {0}, len: {1}")]
+    ReadAccessFault(usize, usize),
+
+    #[error("Write Access Fault: offset: {0}, len: {1}")]
+    WriteAccessFault(usize, usize),
+
+    #[error("MMU error: {0}")]
+    ErrMmu(#[from] memory::MmmuErr),
 }
 
 #[derive(Clone)]
@@ -555,6 +564,243 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
 
         }
 
+            /* 
+                The LD instruction loads a 64-bit value from memory into register rd for RV64I.
+                The LW instruction loads a 32-bit value from memory and sign-extends this to 64 bits before storing it in register rd for RV64I. 
+                The LWU instruction, on the other hand, zero-extends the 32-bit value from memory for RV64I. 
+                LH and LHU are defined analogously for 16-bit values, as are LB and LBU for 8-bit values. 
+                The SD, SW, SH, and SB instructions store 64-bit, 32-bit, 16-bit, and 8-bit values from the low
+                bits of register rs2 to memory respectively
+            */
+
+            Inst::Ld { rd, rs1, imm } => {
+                let offset = emu.cpu.get_reg(rs1 as usize)?
+                    .wrapping_add_signed(imm as i64) as usize;
+                
+                let len = 8;
+                let mut value = 0;
+
+                let perms = emu.mmu.perm_get(offset, len)?;
+                if perms.iter().any(|&perm| perm & PERM_R == 0) {
+                    return Err(CpuErr::ReadAccessFault(offset, len));
+                }
+
+                let buf = emu.mmu.dram_read(offset, len)?;
+
+                for (i, val) in buf.iter().enumerate() {
+                    value |= (*val as u64) << i*8;
+                }
+
+                emu.cpu.set_reg(rd as usize , value)?;
+            }
+
+            Inst::Lw { rd, rs1, imm } => {
+                let offset = emu.cpu.get_reg(rs1 as usize)?
+                    .wrapping_add_signed(imm as i64) as usize;
+                
+                let len = 4;
+                let mut value = 0;
+
+                let perms = emu.mmu.perm_get(offset, len)?;
+                if perms.iter().any(|&perm| perm & PERM_R == 0) {
+                    return Err(CpuErr::ReadAccessFault(offset, len));
+                }
+
+                let buf = emu.mmu.dram_read(offset, len)?;
+
+                for (i, val) in buf.iter().enumerate() {
+                    value |= (*val as u64) << i*8;
+                }
+
+                let value = value as i32 as i64 as u64;
+
+                emu.cpu.set_reg(rd as usize , value)?;
+            }
+
+            Inst::Lwu { rd, rs1, imm } => {
+                let offset = emu.cpu.get_reg(rs1 as usize)?
+                    .wrapping_add_signed(imm as i64) as usize;
+                    
+                let len = 4;
+                let mut value = 0;
+
+                let perms = emu.mmu.perm_get(offset, len)?;
+                if perms.iter().any(|&perm| perm & PERM_R == 0) {
+                    return Err(CpuErr::ReadAccessFault(offset, len));
+                }
+
+                let buf = emu.mmu.dram_read(offset, len)?;
+
+                for (i, val) in buf.iter().enumerate() {
+                    value |= (*val as u64) << i*8;
+                }
+
+                emu.cpu.set_reg(rd as usize , value)?;
+            }
+
+            Inst::Lh { rd, rs1, imm } => {
+                let offset = emu.cpu.get_reg(rs1 as usize)?
+                    .wrapping_add_signed(imm as i64) as usize;
+                
+                let len = 2;
+                let mut value = 0;
+
+                let perms = emu.mmu.perm_get(offset, len)?;
+                if perms.iter().any(|&perm| perm & PERM_R == 0) {
+                    return Err(CpuErr::ReadAccessFault(offset, len));
+                }
+
+                let buf = emu.mmu.dram_read(offset, len)?;
+
+                for (i, val) in buf.iter().enumerate() {
+                    value |= (*val as u64) << i*8;
+                }
+
+                let value = value as i16 as i64 as u64;
+
+                emu.cpu.set_reg(rd as usize , value)?;
+            }
+
+            Inst::Lhu { rd, rs1, imm } => {
+                let offset = emu.cpu.get_reg(rs1 as usize)?
+                    .wrapping_add_signed(imm as i64) as usize;
+                
+                let len = 2;
+                let mut value = 0;
+
+                let perms = emu.mmu.perm_get(offset, len)?;
+                if perms.iter().any(|&perm| perm & PERM_R == 0) {
+                    return Err(CpuErr::ReadAccessFault(offset, len));
+                }
+
+                let buf = emu.mmu.dram_read(offset, len)?;
+
+                for (i, val) in buf.iter().enumerate() {
+                    value |= (*val as u64) << i*8;
+                }
+
+                emu.cpu.set_reg(rd as usize , value)?;
+            }
+
+            Inst::Lb { rd, rs1, imm } => {
+                let offset = emu.cpu.get_reg(rs1 as usize)?
+                    .wrapping_add_signed(imm as i64) as usize;
+                
+                let len = 1;
+                let mut value = 0;
+
+                let perms = emu.mmu.perm_get(offset, len)?;
+                if perms.iter().any(|&perm| perm & PERM_R == 0) {
+                    return Err(CpuErr::ReadAccessFault(offset, len));
+                }
+
+                let buf = emu.mmu.dram_read(offset, len)?;
+
+                for (i, val) in buf.iter().enumerate() {
+                    value |= (*val as u64) << i*8;
+                }
+
+                let value = value as i8 as i64 as u64;
+
+                emu.cpu.set_reg(rd as usize , value)?;
+            }
+
+            Inst::Lbu { rd, rs1, imm } => {
+                let offset = emu.cpu.get_reg(rs1 as usize)?
+                    .wrapping_add_signed(imm as i64) as usize;
+                
+                let len = 1;
+                let mut value = 0;
+
+                let perms = emu.mmu.perm_get(offset, len)?;
+                if perms.iter().any(|&perm| perm & PERM_R == 0) {
+                    return Err(CpuErr::ReadAccessFault(offset, len));
+                }
+
+                let buf = emu.mmu.dram_read(offset, len)?;
+
+                for (i, val) in buf.iter().enumerate() {
+                    value |= (*val as u64) << i*8;
+                }
+
+                emu.cpu.set_reg(rd as usize , value)?;
+            }
+
+            Inst::Sd { rs2, rs1, imm } => {
+                let offset = emu.cpu.get_reg(rs1 as usize)?
+                    .wrapping_add_signed(imm as i64) as usize;
+                
+                let len = 8; 
+
+                let perms = emu.mmu.perm_get(offset, len)?;
+                if perms.iter().any(|&perm| perm & PERM_W == 0) {
+                    return Err(CpuErr::WriteAccessFault(offset, len));
+                }
+            
+                let value = emu.cpu.get_reg(rs2 as usize)?;
+
+                let data = value.to_le_bytes();
+
+                emu.mmu.dram_write(offset, &data[..len])?;
+
+            }
+
+            Inst::Sw { rs2, rs1, imm } => {
+                let offset = emu.cpu.get_reg(rs1 as usize)?
+                    .wrapping_add_signed(imm as i64) as usize;
+                
+                let len = 4; 
+
+                let perms = emu.mmu.perm_get(offset, len)?;
+                if perms.iter().any(|&perm| perm & PERM_W == 0) {
+                    return Err(CpuErr::WriteAccessFault(offset, len));
+                }
+            
+                let value = emu.cpu.get_reg(rs2 as usize)?;
+
+                let data = value.to_le_bytes();
+
+                emu.mmu.dram_write(offset, &data[..len])?;
+
+            }
+
+            Inst::Sh { rs2, rs1, imm } => {
+                let offset = emu.cpu.get_reg(rs1 as usize)?
+                    .wrapping_add_signed(imm as i64) as usize;
+                
+                let len = 2; 
+
+                let perms = emu.mmu.perm_get(offset, len)?;
+                if perms.iter().any(|&perm| perm & PERM_W == 0) {
+                    return Err(CpuErr::WriteAccessFault(offset, len));
+                }
+            
+                let value = emu.cpu.get_reg(rs2 as usize)?;
+
+                let data = value.to_le_bytes();
+
+                emu.mmu.dram_write(offset, &data[..len])?;
+
+            }
+
+            Inst::Sb { rs2, rs1, imm } => {
+                let offset = emu.cpu.get_reg(rs1 as usize)?
+                    .wrapping_add_signed(imm as i64) as usize;
+                
+                let len = 1; 
+
+                let perms = emu.mmu.perm_get(offset, len)?;
+                if perms.iter().any(|&perm| perm & PERM_W == 0) {
+                    return Err(CpuErr::WriteAccessFault(offset, len));
+                }
+            
+                let value = emu.cpu.get_reg(rs2 as usize)?;
+
+                let data = value.to_le_bytes();
+
+                emu.mmu.dram_write(offset, &data[..len])?;
+
+            }
 
         _=> handle_undefined()
     }
