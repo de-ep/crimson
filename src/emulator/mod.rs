@@ -6,7 +6,7 @@ mod exceptions;
 
 use std::path::Path;
 use memory::Mmu;
-use cpu::Cpu;
+use cpu::{Cpu, CpuErr};
 use exceptions::{handle_expection, Exceptions};
 
 #[derive(thiserror::Error, Debug)]
@@ -69,7 +69,7 @@ impl Emulator {
         Ok(inst)
     }
 
-    fn exec(&mut self) -> Result<(), EmulatorErr> {
+    fn exec(&mut self) -> Result<bool, EmulatorErr> {
         
         let pc = self.cpu.get_pc() as usize;
         let perms = self.mmu.perm_get(pc, cpu::RAW_INST_SIZE as usize)?;
@@ -86,25 +86,33 @@ impl Emulator {
   
         //FDE
         let rinst = self.fetch_rinst()?;
-        let inst = decoder::decode(rinst);
-        cpu::exec(self, inst)?;
+        let inst = decoder::decode(rinst);println!("{:?}",inst);
 
+        if let Err(err) = cpu::exec(self, inst) {
+            return match err {// inc pc incase we decide that we can continue running after exception
+                CpuErr::ReadAccessFault(offset, _) => self.handle_exception(Exceptions::ExceptionAccessFault(offset)),
+                CpuErr::WriteAccessFault(offset,_) => self.handle_exception(Exceptions::ExceptionAccessFault(offset)),
+
+                _=> Err(err.into())
+            }
+        } 
         
-        Ok(())
+        Ok(false)
     }
 
-    fn handle_exception(&self, exception: Exceptions) -> Result<(), EmulatorErr> {
+    fn handle_exception(&self, exception: Exceptions) -> Result<bool, EmulatorErr> {
         let continue_execution = exceptions::handle_expection(exception)?;
 
         if !continue_execution {
             println!();
         }
 
-        Ok(())
+        Ok(continue_execution)
     }
 
 }
 
+/*
 pub fn emulate() {
     let mut emu = Emulator::new();
     //println!("{:?}", decoder::decode(0x7369));
@@ -129,4 +137,27 @@ pub fn emulate() {
         println!("cookedok");
     }
     println!("{:?}",decoder::decode(0x00000073));
+}
+
+     */
+
+
+
+pub fn emulate<P: AsRef<Path>>(file: &P) -> Result<(), EmulatorErr>{
+    let mut emu = Emulator::new();
+    let mut exit_cond = false;
+
+    emu.load(file)?;
+
+    while !exit_cond {
+        
+        exit_cond = emu.exec()?;    
+    }
+    
+    for i in 0..cpu::MAX_REGS{
+        println!("x{}: {}", i, emu.cpu.get_reg(i)?);
+    }println!("pc: {}", emu.cpu.get_pc());
+
+
+    Ok(())
 }

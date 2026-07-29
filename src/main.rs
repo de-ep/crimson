@@ -1,6 +1,11 @@
 mod emulator;
 
 fn main() {
-    emulator::emulate();
+    if let Err(err) = emulator::emulate(&"/home/Deep/Desktop/emu/temp") {
+        println!("err: {:?}", err);
+    }
+    else {
+        println!("okay");
+    }
     
 }

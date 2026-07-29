@@ -83,19 +83,6 @@ fn handle_undefined() {
 }
 
 
-/*
-    1.4. Memory
-        The memory address space is circular, so that the byte at address dram.len()-1 is adjacent to the byte at address zero
-        [it this for software running in execution env, so it should be implemented here]
-*/
-
-fn get_circular_mem_vaddr(vaddr: usize, dram_len: usize) -> usize {
-    if dram_len <= vaddr {
-        return vaddr - dram_len;
-    }
-
-    vaddr
-}
 
 /*
     2.1. Programmers' Model for Base Integer ISA
@@ -335,6 +322,37 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
 
             emu.cpu.set_reg(rd as usize, value as u64)?;
         }
+
+            /*
+                AND, OR, and XOR perform bitwise logical operations.
+            */
+        
+        Inst::And { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)?;
+
+            let value = rs1_val & rs2_val;
+            
+            emu.cpu.set_reg(rd as usize, value)?;
+        }
+
+        Inst::Or { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)?;
+
+            let value = rs1_val | rs2_val;
+            
+            emu.cpu.set_reg(rd as usize, value)?;
+        }
+
+        Inst::Xor { rd, rs1, rs2 } => {
+            let rs1_val = emu.cpu.get_reg(rs1 as usize)?;
+            let rs2_val = emu.cpu.get_reg(rs2 as usize)?;
+
+            let value = rs1_val ^ rs2_val;
+            
+            emu.cpu.set_reg(rd as usize, value)?;
+        }
     
             /*
                 SLT and SLTU perform signed and unsigned compares respectively, writing 1 to rd if rs1 < rs2, 0 otherwise.
@@ -563,15 +581,18 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
             }
 
         }
-
-            /* 
-                The LD instruction loads a 64-bit value from memory into register rd for RV64I.
-                The LW instruction loads a 32-bit value from memory and sign-extends this to 64 bits before storing it in register rd for RV64I. 
-                The LWU instruction, on the other hand, zero-extends the 32-bit value from memory for RV64I. 
-                LH and LHU are defined analogously for 16-bit values, as are LB and LBU for 8-bit values. 
-                The SD, SW, SH, and SB instructions store 64-bit, 32-bit, 16-bit, and 8-bit values from the low
-                bits of register rs2 to memory respectively
+            /*
+                4.3. Load and Store Instructions
             */
+
+                /* 
+                    The LD instruction loads a 64-bit value from memory into register rd for RV64I.
+                    The LW instruction loads a 32-bit value from memory and sign-extends this to 64 bits before storing it in register rd for RV64I. 
+                    The LWU instruction, on the other hand, zero-extends the 32-bit value from memory for RV64I. 
+                    LH and LHU are defined analogously for 16-bit values, as are LB and LBU for 8-bit values. 
+                    The SD, SW, SH, and SB instructions store 64-bit, 32-bit, 16-bit, and 8-bit values from the low
+                    bits of register rs2 to memory respectively
+                */
 
             Inst::Ld { rd, rs1, imm } => {
                 let offset = emu.cpu.get_reg(rs1 as usize)?
@@ -802,7 +823,38 @@ pub fn exec(emu: &mut Emulator, inst: Inst) -> Result<(), CpuErr> {
 
             }
 
-        _=> handle_undefined()
+            /*
+                2.7. Memory Ordering Instructions
+            */
+
+                //Dont need to care about these for now
+
+            Inst::Fence { rd, rs1, imm_raw } => {
+                
+            }
+
+            Inst::FenceTso => {
+                
+            }
+
+            /* 
+                2.8. Environment Call and Breakpoints
+            */
+            Inst::Ebreak => {
+
+            }
+            Inst::Ecall => {
+
+            }
+            Inst::Pause => {
+
+            }
+            Inst::Undefined => {
+                
+            }
+
+
+        _=> return Err(CpuErr::InvalidInstruction(1337))       //impl display for Inst 
     }
 
     if increment_program_counter {

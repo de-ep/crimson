@@ -1,5 +1,9 @@
 #[derive(thiserror::Error, Debug)]
-pub enum ExceptionHandlerErr {}
+pub enum ExceptionHandlerErr {
+
+    #[error("Critical Exception: {0}")]
+    CriticalException(#[from] Exceptions),
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum Exceptions {
@@ -18,7 +22,13 @@ pub enum Exceptions {
 pub fn handle_expection(exception: Exceptions) -> Result<bool, ExceptionHandlerErr> {
     let continue_execution = false;
 
-    todo!("exceptions");
+    match exception {
+
+
+        _ => {
+            return Err(exception.into());
+        }
+    }
 
     Ok(continue_execution)
 }
