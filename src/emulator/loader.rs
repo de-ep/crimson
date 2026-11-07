@@ -5,7 +5,9 @@ use thiserror::Error;
 const MAGIC_ELF: [u8; 4] = [0x7F, 0x45, 0x4C, 0x46];        //.ELF
 
 pub enum FileType {
+    Shellcode,
     Elf,
+    Pe,
 }
 
 pub struct File {
@@ -32,10 +34,15 @@ pub enum LoaderErr {
 pub fn load_file_to_dram<P: AsRef<Path>>(mmu: &mut Mmu, file: &P) -> Result<File, LoaderErr> {
     let data = fs::read(file)?;
 
-    if data.len() > MAGIC_ELF.len() {
-        if MAGIC_ELF == data[0..MAGIC_ELF.len()] {
+    Ok(load_file_from_buf(mmu, &data)?)
+}
+
+pub fn load_file_from_buf(mmu: &mut Mmu, buf: &[u8]) -> Result<File, LoaderErr> {
+    
+    if buf.len() > MAGIC_ELF.len() {
+        if MAGIC_ELF == buf[0..MAGIC_ELF.len()] {
             // right now loader does not support binaries compiled with pie
-            return elf_loader::load_elf_to_dram(mmu, &data);
+            return elf_loader::load_elf_to_dram(mmu, &buf);
         } 
     }
     

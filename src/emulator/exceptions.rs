@@ -2,7 +2,7 @@
 pub enum ExceptionHandlerErr {
 
     #[error("Critical Exception: {0}")]
-    CriticalException(#[from] Exceptions),
+    ErrCriticalException(#[from] Exceptions),
 }
 
 #[derive(thiserror::Error, Debug)]

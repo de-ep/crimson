@@ -4,6 +4,7 @@ const DRAM_SIZE_MAX: usize = DRAM_SIZE_INITIAL * 8;
 pub const PERM_R: u8 = 1;
 pub const PERM_W: u8 = 1 << 1;
 pub const PERM_X: u8 = 1 << 2;
+pub const PERM_B: u8 = 1 << 3;                      //breakpoint
 
 
 #[derive(thiserror::Error, Debug)]
@@ -92,6 +93,11 @@ impl Mmu {
         bound_check(end, self.dram.len())?;
 
         Ok(&self.dram[vaddr..end])
+    }
+
+    pub fn dram_len(&self) -> usize {
+        
+        self.dram.len()
     }
 
 }

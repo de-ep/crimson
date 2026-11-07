@@ -22,6 +22,9 @@ pub enum EmulatorErr {
 
     #[error("Exception Handler error: {0}")]
     ErrExceptionHandler(#[from] exceptions::ExceptionHandlerErr),
+
+    #[error("Invalid Memory Address: {0}")]
+    InvalidMemoryAddress(usize),
 }
 
 #[derive(Clone)]
@@ -70,7 +73,8 @@ impl Emulator {
     }
 
     fn exec(&mut self) -> Result<bool, EmulatorErr> {
-        
+        let mut exit_cond = false;
+
         let pc = self.cpu.get_pc() as usize;
         let perms = self.mmu.perm_get(pc, cpu::RAW_INST_SIZE as usize)?;
 
@@ -95,9 +99,9 @@ impl Emulator {
 
                 _=> Err(err.into())
             }
-        } 
+        } //handle exit condition when handle_exception is called
         
-        Ok(false)
+        Ok(exit_cond)
     }
 
     fn handle_exception(&self, exception: Exceptions) -> Result<bool, EmulatorErr> {

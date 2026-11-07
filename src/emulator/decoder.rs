@@ -1,6 +1,5 @@
 const SIZE_INSTRUCTION_TYPE_LOOKUP_TABLE: usize = 128;
 
-//we need to make this shit more robust
 #[derive(Debug, Clone, Copy)]
 pub enum InstType {
     R,
@@ -123,10 +122,30 @@ pub fn decode(inst: u32) -> Inst {
                                     _=> return Inst::Undefined
                                 }
                             }
-                            0b001 => return Inst::Sll { rd: rd, rs1: rs1, rs2: rs2 },
-                            0b010 => return Inst::Slt { rd: rd, rs1: rs1, rs2: rs2 },
-                            0b011 => return Inst::Sltu { rd: rd, rs1: rs1, rs2: rs2 },
-                            0b100 => return Inst::Xor { rd: rd, rs1: rs1, rs2: rs2 },
+                            0b001 => {
+                                match funct7 {
+                                    0 => return Inst::Sll { rd: rd, rs1: rs1, rs2: rs2 },
+                                    _=> return Inst::Undefined
+                                }
+                            }
+                            0b010 => {
+                                match funct7 {
+                                    0 => return Inst::Slt { rd: rd, rs1: rs1, rs2: rs2 },
+                                    _=> return Inst::Undefined
+                                }
+                            }
+                            0b011 => {
+                                match funct7 {
+                                    0 => return Inst::Sltu { rd: rd, rs1: rs1, rs2: rs2 },
+                                    _=> return Inst::Undefined
+                                }
+                            }
+                            0b100 => {
+                                match funct7 {
+                                    0 => return Inst::Xor { rd: rd, rs1: rs1, rs2: rs2 },
+                                    _=> return Inst::Undefined
+                                }
+                            }
                             0b101 => {
                                 match funct7 {
                                     0b0000000 => return Inst::Srl { rd: rd, rs1: rs1, rs2: rs2 },
@@ -134,8 +153,18 @@ pub fn decode(inst: u32) -> Inst {
                                     _=> return Inst::Undefined
                                 }
                             }
-                            0b110 => return Inst::Or { rd: rd, rs1: rs1, rs2: rs2 },
-                            0b111 => return Inst::And { rd: rd, rs1: rs1, rs2: rs2 },
+                            0b110 => {
+                                match funct7 {
+                                    0 => return Inst::Or { rd: rd, rs1: rs1, rs2: rs2 },
+                                    _=> return Inst::Undefined
+                                }
+                            }
+                            0b111 => {
+                                match funct7 {
+                                    0 => return Inst::And { rd: rd, rs1: rs1, rs2: rs2 },
+                                    _=> return Inst::Undefined
+                                }
+                            }
                             _=> return Inst::Undefined
                         }
                     }
@@ -148,7 +177,12 @@ pub fn decode(inst: u32) -> Inst {
                                     _=> return Inst::Undefined
                                 }
                             }
-                            0b001 => return Inst::Sllw { rd: rd, rs1: rs1, rs2: rs2 },
+                            0b001 => {
+                                match funct7 {
+                                    0 => return Inst::Sllw { rd: rd, rs1: rs1, rs2: rs2 },
+                                    _=> return Inst::Undefined
+                                }
+                            }
                             0b101 => {
                                 match funct7 {
                                     0b0000000 => return Inst::Srlw { rd: rd, rs1: rs1, rs2: rs2 },
@@ -181,7 +215,12 @@ pub fn decode(inst: u32) -> Inst {
                 let imm = ((imm as i32) << 20) >> 20;
 
                 match opcode {
-                    0b1100111 => return Inst::Jalr { rd: rd, rs1: rs1, imm: imm },
+                    0b1100111 => {
+                        match funct3 {
+                            0 => return Inst::Jalr { rd: rd, rs1: rs1, imm: imm },
+                            _=> return Inst::Undefined
+                        }
+                    }                            
                     0b0000011 => {
                         match funct3 {
                             0b000 => return Inst::Lb { rd: rd, rs1: rs1, imm: imm },
@@ -202,7 +241,12 @@ pub fn decode(inst: u32) -> Inst {
                             0b100 => return Inst::Xori  { rd: rd, rs1: rs1, imm: imm },
                             0b110 => return Inst::Ori  { rd: rd, rs1: rs1, imm: imm },
                             0b111 => return Inst::Andi { rd: rd, rs1: rs1, imm: imm },
-                            0b001 => return Inst::Slli { rd: rd, rs1: rs1, shamt: shamt_6 },
+                            0b001 => {
+                                match funct7 {
+                                    0 => return Inst::Slli { rd: rd, rs1: rs1, shamt: shamt_6 },
+                                    _=> return Inst::Undefined
+                                }
+                            }
                             0b101 => {
                                 match funct7 {
                                     0b0000000 => return Inst::Srli { rd: rd, rs1: rs1, shamt: shamt_6 },
@@ -241,7 +285,12 @@ pub fn decode(inst: u32) -> Inst {
                     0b0011011 => {
                         match funct3 {
                             0b000 => return Inst::Addiw { rd: rd, rs1: rs1, imm: imm },
-                            0b001 => return Inst::Slliw { rd: rd, rs1: rs1, shamt: shamt_5 },
+                            0b001 => {
+                                match funct7 >> 5 {
+                                    0 => return Inst::Slliw { rd: rd, rs1: rs1, shamt: shamt_5 },
+                                    _=> return Inst::Undefined,
+                                }
+                            }
                             0b101 => {
                                 match funct7 >> 5 {
                                     0b0000000 => return Inst::Srliw { rd: rd, rs1: rs1, shamt: shamt_5 },
@@ -295,7 +344,7 @@ pub fn decode(inst: u32) -> Inst {
                 let imm105 = (imm2 & 0b1111_11) << 5;
                 let imm12 = (imm2 >> 6) << 12;
                 let imm = imm41 | imm105 | imm11 | imm12;
-                let imm = ((imm as i32) << 20) >> 20;  
+                let imm = ((imm as i32) << 19) >> 19;  
 
                 match opcode {
                     0b1100011 => {
@@ -318,7 +367,7 @@ pub fn decode(inst: u32) -> Inst {
                 let imm = inst >> 12;
 
                 //sign extend imm
-                let imm = ((inst as i32) << 12) >> 12;
+                let imm = ((imm as i32) << 12) >> 12;
 
                 match opcode {
                     0b0110111 => return Inst::Lui { rd: rd, imm: imm },
@@ -337,7 +386,7 @@ pub fn decode(inst: u32) -> Inst {
                 let imm101 = ((inst >> 21) & 0b1111_1111_11) << 1;
                 let imm20 = (inst >> 31) << 20;
                 let imm = imm101 | imm11 | imm1912 | imm20;
-                let imm = ((imm as i32) << 12) >> 12;
+                let imm = ((imm as i32) << 11) >> 11;
 
                 match opcode {
                     0b1101111 => return Inst::Jal { rd: rd, imm: imm },
